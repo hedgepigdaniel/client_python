@@ -3,6 +3,7 @@
 from __future__ import unicode_literals
 
 import os
+import errno
 
 from . import core
 try:
@@ -79,10 +80,21 @@ class ProcessCollector(object):
                                                          'Maximum number of open file descriptors.',
                                                          value=float(line.split()[3]))
                         break
-            open_fds = core.GaugeMetricFamily(self._prefix + 'open_fds',
-                                              'Number of open file descriptors.',
-                                              len(os.listdir(os.path.join(pid, 'fd'))))
-            result.extend([open_fds, max_fds])
+
+            result.extend([max_fds])
+
+            try:
+                ls = os.listdir(os.path.join(pid, 'fd'))
+            except OSError as e:
+                # Apache MPM prefork, not threaded, has /proc/self owned by root.
+                if e.errno != errno.EACCES:
+                    raise
+
+            else:
+                open_fds = core.GaugeMetricFamily(self._prefix + 'open_fds',
+                    'Number of open file descriptors.', len(ls))
+                result.extend([open_fds])
+
         except IOError:
             pass
 
